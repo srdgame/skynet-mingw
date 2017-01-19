@@ -18,7 +18,7 @@ CFLAGS := -g -O2 -Wall -I$(PLATFORM_INC) -I$(LUA_INC) $(MYCFLAGS)
 # CFLAGS += -DUSE_PTHREAD_LOCK
 
 # link
-LDFLAGS := -llua53 -lplatform -lpthread -lws2_32 -L$(SKYNET_BUILD_PATH)
+LDFLAGS := -llua53 -lplatform -lpthreadGC2 -lws2_32 -L$(SKYNET_BUILD_PATH)
 SHARED := --shared
 EXPORT := -Wl,-E
 SHAREDLDFLAGS := -llua53 -lskynet -lplatform -lws2_32 -L$(SKYNET_BUILD_PATH)
@@ -28,7 +28,8 @@ CSERVICE = snlua logger gate harbor
 LUA_CLIB = skynet socketdriver bson mongo md5 netpack \
   clientsocket memory profile multicast \
   cluster crypt sharedata stm sproto lpeg \
-  mysqlaux debugchannel
+  mysqlaux debugchannel lfs cjson iconv LuaXML_lib \
+  visapi vislog
 
 all : \
 	$(LUA_STATICLIB) \
@@ -91,7 +92,7 @@ $(LUA_CLIB_PATH)/netpack.so : lualib-src/lua-netpack.c | $(LUA_CLIB_PATH)
 	$(CC) $(CFLAGS) $(SHARED) $^ -Iskynet-src -o $@  $(SHAREDLDFLAGS) 
 
 $(LUA_CLIB_PATH)/clientsocket.so : lualib-src/lua-clientsocket.c | $(LUA_CLIB_PATH)
-	$(CC) -includeplatform.h $(CFLAGS) $(SHARED) $^ -o $@ -lpthread  $(SHAREDLDFLAGS)
+	$(CC) -includeplatform.h $(CFLAGS) $(SHARED) $^ -o $@ -lpthreadGC2  $(SHAREDLDFLAGS)
 
 $(LUA_CLIB_PATH)/memory.so : lualib-src/lua-memory.c | $(LUA_CLIB_PATH)
 	$(CC) $(CFLAGS) $(SHARED) -Iskynet-src $^ -o $@  $(SHAREDLDFLAGS) 
@@ -126,6 +127,24 @@ $(LUA_CLIB_PATH)/mysqlaux.so : lualib-src/lua-mysqlaux.c | $(LUA_CLIB_PATH)
 $(LUA_CLIB_PATH)/debugchannel.so : lualib-src/lua-debugchannel.c | $(LUA_CLIB_PATH)
 	$(CC) $(CFLAGS) $(SHARED) -Iskynet-src $^ -o $@  $(SHAREDLDFLAGS)	
 
+$(LUA_CLIB_PATH)/lfs.so : 3rd/luafilesystem/src/lfs.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/luafilesystem/src $^ -o $@  $(SHAREDLDFLAGS) 
+
+$(LUA_CLIB_PATH)/cjson.so : 3rd/cjson/fpconv.c 3rd/cjson/lua_cjson.c 3rd/cjson/strbuf.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/cjson $^ -o $@  $(SHAREDLDFLAGS) 
+
+$(LUA_CLIB_PATH)/iconv.so : 3rd/iconv/luaiconv.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/iconv $^ -o $@ -liconv $(SHAREDLDFLAGS) 
+
+$(LUA_CLIB_PATH)/LuaXML_lib.so : 3rd/luaxml/LuaXML_lib.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/luaxml $^ -o $@  $(SHAREDLDFLAGS) 
+
+$(LUA_CLIB_PATH)/visapi.so : 3rd/visapi/lua_visapi.c 3rd/visapi/threadpool.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) -DMINGW32_BUILD $(SHARED) -I3rd/visapi $^ -o $@ -lpthreadGC2 $(SHAREDLDFLAGS) 
+
+$(LUA_CLIB_PATH)/vislog.so : 3rd/visapi/lua_vislog.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) -DMINGW32_BUILD $(SHARED) -I3rd/visapi $^ -o $@  $(SHAREDLDFLAGS) 
+	
 clean :
 	rm -f $(SKYNET_BUILD_PATH)/skynet.exe $(SKYNET_BUILD_PATH)/skynet.dll $(SKYNET_BUILD_PATH)/platform.dll $(CSERVICE_PATH)/*.so $(LUA_CLIB_PATH)/*.so
 
