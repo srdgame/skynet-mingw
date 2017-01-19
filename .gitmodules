@@ -3,4 +3,4 @@
 	url = https://github.com/srdgame/skynet.git
 [submodule "28181"]
 	path = 28181
-	url = cch@10.0.2.2:~/sip/skynet
+	url = cch@172.16.10.89:~/sip/skynet
