@@ -14,4 +14,8 @@
 #define EINPROGRESS WSAEINPROGRESS
 #endif
 
+#ifndef ECONNABORTED
+#define ECONNABORTED WSAECONNABORTED
+#endif
+
 #undef near

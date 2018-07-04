@@ -14,21 +14,30 @@ LUA_INC ?= 3rd/lua
 
 PLATFORM_INC ?= platform
 
-CFLAGS := -g -O2 -Wall -I$(PLATFORM_INC) -I$(LUA_INC) $(MYCFLAGS)
+CFLAGS := -g -O2 -Wall -I$(PLATFORM_INC) -I$(LUA_INC) -I/usr/local/include -I/usr/local/ssl/include -I/include $(MYCFLAGS)
 # CFLAGS += -DUSE_PTHREAD_LOCK
 
 # link
 LDFLAGS := -llua53 -lplatform -lpthread -lws2_32 -L$(SKYNET_BUILD_PATH)
 SHARED := --shared
 EXPORT := -Wl,-E
-SHAREDLDFLAGS := -llua53 -lskynet -lplatform -lws2_32 -L$(SKYNET_BUILD_PATH)
+SHAREDLDFLAGS := -llua53 -lskynet -lplatform -lws2_32 -L$(SKYNET_BUILD_PATH) -L/usr/local/lib -L/usr/local/ssl/lib -L/lib
 
 # skynet
 
 CSERVICE = snlua logger gate harbor
 LUA_CLIB = skynet \
   clientsocket \
-  bson md5 sproto lpeg
+  bson md5 sproto lpeg \
+
+LUA_EX_CLIB = \
+  lfs cjson iconv \
+  LuaXML_lib visapi \
+  rs232/core mosquitto \
+  lcurl zlib\
+  \
+
+ICONV_LIBS := -liconv
 
 LUA_CLIB_SKYNET = \
   lua-skynet.c lua-seri.c \
@@ -44,6 +53,7 @@ LUA_CLIB_SKYNET = \
   lua-stm.c \
   lua-mysqlaux.c \
   lua-debugchannel.c \
+  lua-datasheet.c \
   \
 
 SKYNET_EXE_SRC = skynet_main.c
@@ -59,9 +69,10 @@ all : \
   	$(SKYNET_BUILD_PATH)/skynet.dll \
   	$(SKYNET_BUILD_PATH)/skynet.exe \
 	$(foreach v, $(CSERVICE), $(CSERVICE_PATH)/$(v).so) \
-	$(foreach v, $(LUA_CLIB), $(LUA_CLIB_PATH)/$(v).so)
+	$(foreach v, $(LUA_CLIB), $(LUA_CLIB_PATH)/$(v).so) \
+	$(foreach v, $(LUA_EX_CLIB), $(LUA_CLIB_PATH)/$(v).so) 
 
-$(SKYNET_BUILD_PATH)/platform.dll : platform/platform.c platform/epoll.c platform/socket_poll.c platform/socket_extend.c
+$(SKYNET_BUILD_PATH)/platform.dll : platform/platform.c platform/epoll.c platform/socket_poll.c platform/socket_extend.c platform/arpa/inet.c
 	$(CC) $(CFLAGS) $(SHARED) $^ -lws2_32 -lwsock32 -o $@ -DDONOT_USE_IO_EXTEND -DFD_SETSIZE=1024
 
 $(SKYNET_BUILD_PATH)/skynet.dll : $(foreach v, $(SKYNET_SRC), skynet-src/$(v)) | $(LUA_LIB) $(SKYNET_BUILD_PATH)/platform.dll
@@ -80,6 +91,10 @@ $(LUA_CLIB_PATH) :
 $(CSERVICE_PATH) :
 	mkdir $(CSERVICE_PATH)
 
+$(RS232_CLIB_PATH):
+	cp 3rd/librs232/bindings/lua/rs232.lua lualib/
+	mkdir $(RS232_CLIB_PATH)
+	
 define CSERVICE_TEMP
   $$(CSERVICE_PATH)/$(1).so : service-src/service_$(1).c | $$(CSERVICE_PATH)
 	$$(CC) $$(CFLAGS) $$(SHARED) $$< -o $$@ -Iskynet-src $$(SHAREDLDFLAGS) 
@@ -104,6 +119,92 @@ $(LUA_CLIB_PATH)/sproto.so : lualib-src/sproto/sproto.c lualib-src/sproto/lsprot
 
 $(LUA_CLIB_PATH)/lpeg.so : 3rd/lpeg/lpcap.c 3rd/lpeg/lpcode.c 3rd/lpeg/lpprint.c 3rd/lpeg/lptree.c 3rd/lpeg/lpvm.c | $(LUA_CLIB_PATH)
 	$(CC) $(CFLAGS) $(SHARED) -I3rd/lpeg $^ -o $@  $(SHAREDLDFLAGS) 
+
+$(LUA_CLIB_PATH)/lfs.so : 3rd/luafilesystem/src/lfs.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/luafilesystem/src $^ -o $@  $(SHAREDLDFLAGS)
+
+$(LUA_CLIB_PATH)/cjson.so : 3rd/cjson/fpconv.c 3rd/cjson/lua_cjson.c 3rd/cjson/strbuf.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/cjson $^ -o $@  $(SHAREDLDFLAGS)
+
+$(LUA_CLIB_PATH)/iconv.so : 3rd/iconv/luaiconv.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/iconv $^ -o $@ -liconv $(SHAREDLDFLAGS)
+
+$(LUA_CLIB_PATH)/LuaXML_lib.so : 3rd/luaxml/LuaXML_lib.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/luaxml $^ -o $@  $(SHAREDLDFLAGS)
+
+$(LUA_CLIB_PATH)/visapi.so : 3rd/visapi/lua_visapi.c 3rd/visapi/threadpool.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) -DMINGW32_BUILD $(SHARED) -I3rd/visapi $^ -o $@  -pthread $(SHAREDLDFLAGS)
+
+$(LUA_CLIB_PATH)/enet.so : 3rd/lua-enet/enet.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/enet $^ -o $@  -lenet -lwinmm  $(SHAREDLDFLAGS)
+
+$(LUA_CLIB_PATH)/rs232/core.so : 3rd/librs232/src/rs232.c 3rd/librs232/src/rs232_windows.c 3rd/librs232/bindings/lua/luars232.c | $(RS232_CLIB_PATH)
+	$(CC) $(CFLAGS) -DRS232_STATIC $(SHARED) -I3rd/librs232/include $^ -o $@  $(SHAREDLDFLAGS)
+
+$(LUA_CLIB_PATH)/libmodbus.so : 3rd/lua-libmodbus/lua-libmodbus.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/lua-libmodbus $^ -o $@  -lmodbus  $(SHAREDLDFLAGS)
+
+$(LUA_CLIB_PATH)/zlib.so : 3rd/lua-zlib/lua_zlib.c | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -I3rd/lua-zlib $^ -o $@  -lz  $(SHAREDLDFLAGS)
+
+LUA_CLIB_MQTT_MOSQ = \
+	lib/actions.c \
+	lib/handle_connack.c \
+	lib/handle_publish.c \
+	lib/handle_suback.c \
+	lib/logging_mosq.c \
+	lib/messages_mosq.c \
+	lib/options.c \
+	lib/send_connect.c \
+	lib/send_publish.c \
+	lib/socks_mosq.c \
+	lib/time_mosq.c \
+	lib/util_mosq.c \
+	lib/callbacks.c \
+	lib/handle_ping.c \
+	lib/handle_pubrec.c \
+	lib/handle_unsuback.c \
+	lib/loop.c \
+	lib/mosquitto.c \
+	lib/packet_mosq.c \
+	lib/send_disconnect.c \
+	lib/send_subscribe.c \
+	lib/srv_mosq.c \
+	lib/tls_mosq.c \
+	lib/will_mosq.c \
+	lib/connect.c \
+	lib/handle_pubackcomp.c \
+	lib/handle_pubrel.c \
+	lib/helpers.c \
+	lib/memory_mosq.c \
+	lib/net_mosq.c \
+	lib/read_handle.c \
+	lib/send_mosq.c \
+	lib/send_unsubscribe.c \
+	lib/thread_mosq.c \
+	lib/utf8_mosq.c \
+	\
+
+LUA_CLIB_MOSQ = \
+	lua-mosquitto.c \
+	\
+
+$(LUA_CLIB_PATH)/mosquitto.so : $(addprefix 3rd/lua-mosquitto/deps/mosquitto/,$(LUA_CLIB_MQTT_MOSQ)) $(addprefix 3rd/lua-mosquitto/,$(LUA_CLIB_MOSQ)) | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) -DMINGW32_BUILD -DWINVER=0x0501 -DLIBMOSQUITTO_STATIC $^ -o $@ -I3rd/lua-mosquitto/deps/mosquitto -I3rd/lua-mosquitto/deps/mosquitto/lib -I3rd/lua-mosquitto -DVERSION=\"1.4.12\" -DWITH_THREADING -DWITH_TLS -lssl -lcrypto -lgdi32 -lpthread -lws2_32 -lwsock32 $(SHAREDLDFLAGS)
+
+LUA_CLIB_LCURL = \
+	src/l52util.c \
+	src/lceasy.c \
+	src/lcerror.c \
+	src/lchttppost.c \
+	src/lcmulti.c \
+	src/lcshare.c \
+	src/lcurl.c \
+	src/lcutils.c \
+	\
+
+$(LUA_CLIB_PATH)/lcurl.so : $(addprefix 3rd/curl/,$(LUA_CLIB_LCURL)) | $(LUA_CLIB_PATH)
+	$(CC) $(CFLAGS) $(SHARED) $^ -o $@ -I3rd/curl/src -DPTHREADS -DCURL_STATICLIB -lcurl -lssl -lcrypto -lz -lgdi32 -lpthread -lws2_32 -lwsock32 -lwldap32 $(SHAREDLDFLAGS)
 
 clean :
 	rm -f $(SKYNET_BUILD_PATH)/skynet.exe $(SKYNET_BUILD_PATH)/skynet.dll $(SKYNET_BUILD_PATH)/platform.dll $(CSERVICE_PATH)/*.so $(LUA_CLIB_PATH)/*.so
